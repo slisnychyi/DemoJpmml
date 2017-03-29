@@ -15,8 +15,9 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClients;
 import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.Evaluator;
-import org.jpmml.evaluator.MiningModelEvaluator;
+import org.jpmml.evaluator.ModelEvaluator;
 import org.jpmml.evaluator.ModelEvaluatorFactory;
+import org.jpmml.evaluator.mining.MiningModelEvaluator;
 import org.jpmml.model.ImportFilter;
 import org.jpmml.model.JAXBUtil;
 import org.jpmml.model.visitors.LocatorNullifier;
@@ -46,7 +47,7 @@ public class EvaluatorTransformer {
                 LocatorNullifier locatorNullifier = new LocatorNullifier();
                 locatorNullifier.applyTo(pmml);
 
-                Evaluator evaluator = ModelEvaluatorFactory.newInstance().newModelManager(pmml);
+                Evaluator evaluator = ModelEvaluatorFactory.newInstance().newModelEvaluator(pmml);
 
                 String groupId = fileEntry.getName();
                 groupId = groupId.substring(0 , groupId.indexOf("."));
@@ -77,7 +78,7 @@ public class EvaluatorTransformer {
         objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, true);
 
 
-        MiningModelEvaluator evaluator = objectMapper.readValue(s, MiningModelEvaluator.class);
+        Evaluator evaluator = objectMapper.readValue(s, ModelEvaluator.class);
 
         return evaluator;
     }
