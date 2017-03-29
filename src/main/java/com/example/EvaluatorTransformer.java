@@ -2,6 +2,10 @@ package com.example;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.guava.GuavaModule;
+import com.fasterxml.jackson.datatype.hppc.HppcModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.pcollections.PCollectionsModule;
 import com.google.common.collect.Maps;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
@@ -63,12 +67,17 @@ public class EvaluatorTransformer {
 
         String s = IOUtils.toString(content);
 
-        System.out.println(s);
+        ObjectMapper objectMapper = new ObjectMapper()
+                .registerModule(new GuavaModule())
+                .registerModule(new HppcModule())
+                .registerModule(new PCollectionsModule())
+                .registerModule(new Jdk8Module())
+                ;
 
-        ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, true);
 
-        Evaluator evaluator = objectMapper.readValue(s, MiningModelEvaluator.class);
+
+        MiningModelEvaluator evaluator = objectMapper.readValue(s, MiningModelEvaluator.class);
 
         return evaluator;
     }
