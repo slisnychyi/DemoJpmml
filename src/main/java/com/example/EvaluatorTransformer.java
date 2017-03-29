@@ -78,7 +78,7 @@ public class EvaluatorTransformer {
         objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, true);
 
 
-        Evaluator evaluator = objectMapper.readValue(s, ModelEvaluator.class);
+        Evaluator evaluator = objectMapper.readValue(s, MiningModelEvaluator.class);
 
         return evaluator;
     }
