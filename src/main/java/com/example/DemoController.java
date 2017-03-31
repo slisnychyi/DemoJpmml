@@ -1,6 +1,8 @@
 package com.example;
 
+import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.Evaluator;
+import org.jpmml.evaluator.mining.MiningModelEvaluator;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -10,25 +12,25 @@ import org.xml.sax.SAXException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBException;
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.URISyntaxException;
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 public class DemoController {
 
     private EvaluatorTransformer transformer;
     private TestEntityTransformer testEntityTransformer;
-    private Map<String, Evaluator> evaluators;
+    private Map<String, MiningModelEvaluator> evaluators;
+    private Map<String, PMML> pmmls;
 
     public DemoController() {
         this.testEntityTransformer = new TestEntityTransformer();
         this.transformer = new EvaluatorTransformer();
         try {
             this.evaluators = transformer.getEvaluators();
+            this.pmmls = transformer.getPMMLS();
         } catch (FileNotFoundException | SAXException | JAXBException e) {
             e.printStackTrace();
         }
@@ -55,9 +57,9 @@ public class DemoController {
 
     @RequestMapping(value = { "/getEvaluator3/{id}" }, method = RequestMethod.GET)
     public void getEvaluator3(@PathVariable("id") String id, HttpServletResponse response) throws IOException, URISyntaxException {
+        Evaluator eval = evaluators.get(id);
         ServletOutputStream outputStream = response.getOutputStream();
         ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream);
-        Evaluator eval = evaluators.get(id);
         objectOutputStream.writeObject(eval);
         outputStream.flush();
     }
@@ -78,6 +80,47 @@ public class DemoController {
         return res;
     }
 
+    @RequestMapping(value = { "/getEvaluator5/{id}" }, method = RequestMethod.GET, produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public byte[] getEvaluator5(@PathVariable("id") String id) throws IOException {
+
+        PMML eval = pmmls.get(id);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(bos);
+        objectOutputStream.writeObject(eval);
+        objectOutputStream.flush();
+
+        byte[] res = bos.toByteArray();
+
+        bos.close();
+
+        return res;
+    }
+
+    @RequestMapping(value = { "/getEvaluator6/{id}" }, method = RequestMethod.GET)
+    public void getEvaluator6(@PathVariable("id") String id, HttpServletResponse response) throws IOException, URISyntaxException {
+        ServletOutputStream outputStream = response.getOutputStream();
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream);
+        PMML eval = pmmls.get(id);
+        objectOutputStream.writeObject(eval);
+        outputStream.flush();
+    }
+
+    @RequestMapping(value = {"/getIds"}, method = RequestMethod.GET)
+    @ResponseBody
+    public Set<String> getIds(){
+        return evaluators.keySet();
+    }
+
+    @RequestMapping(value = { "/getEvaluator7" }, method = RequestMethod.GET)
+    public void getEvaluator7(HttpServletResponse response) throws IOException, URISyntaxException {
+        Map<String, MiningModelEvaluator> evaluators = this.evaluators;
+        ServletOutputStream outputStream = response.getOutputStream();
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream);
+        objectOutputStream.writeObject(evaluators);
+        outputStream.flush();
+    }
+
     @RequestMapping(value = { "/executeEvaluator/{url}/{id}" }, method = RequestMethod.GET)
     @ResponseBody
     public void executeEvaluator(@PathVariable("url") String url, @PathVariable("id") String id) throws IOException, ClassNotFoundException {
@@ -85,11 +128,18 @@ public class DemoController {
         evaluator.verify();
     }
 
+    @RequestMapping(value = { "/executePMMLByte/{url}/{id}" }, method = RequestMethod.GET)
+    @ResponseBody
+    public void executePMMLByte(@PathVariable("url") String url, @PathVariable("id") String id) throws IOException, ClassNotFoundException {
+        PMML pmml = transformer.executePMMLByte(url + "/" + id);
+        System.out.println(pmml);
+    }
+
     @RequestMapping(value = { "/executeEvaluatorByte/{url}/{id}" }, method = RequestMethod.GET)
     @ResponseBody
     public void executeEvaluatorByte(@PathVariable("url") String url, @PathVariable("id") String id) throws IOException, ClassNotFoundException {
-        Evaluator evaluator = transformer.executeEvaluationByte(url + "/" + id);
-        evaluator.verify();
+        Evaluator evaluator = transformer.executeEvaluatorByte(url + "/" + id);
+        System.out.println(evaluator);
     }
 
 
