@@ -11,37 +11,49 @@ import com.mongodb.client.gridfs.model.GridFSFile;
 import com.mongodb.client.gridfs.model.GridFSUploadOptions;
 import org.bson.Document;
 import org.bson.types.ObjectId;
+import org.dmg.pmml.PMML;
+import org.jpmml.evaluator.Evaluator;
+import org.jpmml.evaluator.ModelEvaluatorFactory;
+import org.jpmml.model.ImportFilter;
+import org.jpmml.model.JAXBUtil;
+import org.jpmml.model.PMMLUtil;
+import org.junit.Assert;
+import org.junit.Test;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
+import javax.xml.bind.JAXBException;
+import javax.xml.transform.sax.SAXSource;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.lt;
 import static com.mongodb.client.model.Sorts.descending;
+import static org.hamcrest.core.Is.is;
 
 public class GridService {
 
     private static final MongoClient mongoClient = new MongoClient(new MongoClientURI("mongodb://localhost:27017"));
+
+//    private static final MongoClient mongoClient = new MongoClient(new MongoClientURI("mongodb://192.168.249.15:27017, 192.168.251.16:27017"));
     private static final MongoDatabase db = mongoClient.getDatabase("test");
     private static final GridFSBucket gridFSBucket = GridFSBuckets.create(db, "campaign_pmml");
 
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
+    public static void main(String[] args) throws IOException, ClassNotFoundException, JAXBException, SAXException {
 
-        for (int i = 0; i < 10; i++) {
-            insert(createFile());
-            int i1 = lastVersion();
-            System.out.println("version = " + i1);
-
-        }
+//        for (int i = 0; i < 1; i++) {
+//            insert(createFile());
+//            int i1 = lastVersion();
+//            System.out.println("version = " + i1);
+//
+//        }
 
         List<String> files = read();
 
-        dropLast(5);
+//        dropLast(5);
 
     }
 
@@ -58,13 +70,12 @@ public class GridService {
     private static void insert(List<File> files) throws FileNotFoundException {
 
         int version = lastVersion();
+        version++;
 
         for (File file : files) {
-            // Get the input stream
             InputStream streamToUploadFrom = new FileInputStream(file);
-            // Create some custom options
             GridFSUploadOptions options = new GridFSUploadOptions()
-                    .metadata(new Document("version", ++version));
+                    .metadata(new Document("version", version));
 
             ObjectId fileId = gridFSBucket.uploadFromStream(file.getName(), streamToUploadFrom, options);
 
@@ -73,7 +84,7 @@ public class GridService {
 
     }
 
-    private static List<String> read() throws IOException, ClassNotFoundException {
+    private static List<String> read() throws IOException, ClassNotFoundException, SAXException, JAXBException {
 
         ArrayList<String> results = new ArrayList<>();
 
@@ -85,11 +96,35 @@ public class GridService {
             ObjectId objectId = gridFSFile.getObjectId();
             int fileLength = (int) gridFSFile.getLength();
             byte[] bytes = new byte[fileLength];
-            GridFSDownloadStream gridFSDownloadStream = gridFSBucket.openDownloadStream(objectId);
-            gridFSDownloadStream.read(bytes);
+            try(GridFSDownloadStream gridFSDownloadStream = gridFSBucket.openDownloadStream(objectId)){
+                gridFSDownloadStream.read(bytes);
+            }
 
             String result = new String(bytes, StandardCharsets.UTF_8);
-            results.add(result);
+
+            String evaluatorsFromFiles = createEvaluatorsFromFiles(gridFSFile.getFilename());
+
+//            boolean equ = evaluatorsFromFiles.equalsIgnoreCase(result);
+//            System.out.println(equ);
+
+//            InputSource source = new InputSource(new StringReader(evaluatorsFromFiles));
+            InputSource source = new InputSource(new ByteArrayInputStream(bytes));
+
+
+
+            SAXSource filteredSource = ImportFilter.apply(source);
+
+            try {
+                PMML pmml = JAXBUtil.unmarshalPMML(filteredSource);
+
+                Evaluator evaluator = ModelEvaluatorFactory.newInstance().newModelEvaluator(pmml);
+
+                System.out.println(evaluator);
+            } catch (Exception e){
+                e.printStackTrace();
+                System.out.println("FILE CURRUPTED : " + gridFSFile);
+            }
+
         }
 
         return results;
@@ -99,7 +134,7 @@ public class GridService {
         GridFSFile first = gridFSBucket.find().sort(descending("metadata.version")).first();
         if(Objects.nonNull(first)) {
             Object version = first.getMetadata().get("version");
-            if (version != null) {
+            if (Objects.nonNull(version)) {
                 return (int) version;
             }
         }
@@ -107,8 +142,69 @@ public class GridService {
     }
 
     private static List<File> createFile() {
-        File folder = new File("C:\\Users\\Administrator\\Desktop\\tasks\\pmml_task\\testing\\pmml\\pmml_big_files\\bck");
+        File folder = new File("C:\\Users\\Administrator\\Desktop\\tasks\\pmml_task\\testing\\pmml\\pmmlfiles");
         return Arrays.asList(folder.listFiles());
+    }
+
+    private static String createEvaluatorsFromFiles(String fileName) throws FileNotFoundException {
+        List<File> file = createFile();
+
+        Optional<File> first = file.stream().filter(e -> e.getName().equalsIgnoreCase(fileName)).findFirst();
+
+        if(first.isPresent()){
+
+            StringBuilder stringBuilder = new StringBuilder();
+            Scanner scanner = new Scanner(first.get());
+            while (scanner.hasNextLine()) {
+                stringBuilder.append(scanner.nextLine());
+            }
+
+
+            return stringBuilder.toString();
+
+        }
+
+        return null;
+
+    }
+
+    @Test
+    public void test() throws FileNotFoundException, SAXException {
+        int lastVersion = lastVersion();
+
+        GridFSFindIterable gridFSFiles = gridFSBucket.find(eq("metadata.version", lastVersion));
+
+
+        for (GridFSFile gridFSFile : gridFSFiles) {
+
+            System.out.println(gridFSFile.getFilename());
+
+            ObjectId objectId = gridFSFile.getObjectId();
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            gridFSBucket.downloadToStream(objectId, byteArrayOutputStream);
+
+            byte[] bytes = byteArrayOutputStream.toByteArray();
+
+            String result = new String(bytes, StandardCharsets.UTF_8);
+
+//            String result = byteArrayOutputStream.toString();
+            InputSource source = new InputSource(new StringReader(result));
+            SAXSource filteredSource = ImportFilter.apply(source);
+
+            try {
+                PMML pmml = JAXBUtil.unmarshalPMML(filteredSource);
+
+                Evaluator evaluator = ModelEvaluatorFactory.newInstance().newModelEvaluator(pmml);
+
+                System.out.println(evaluator);
+            } catch (Exception e){
+                e.printStackTrace();
+                System.out.println("FILE CURRUPTED : " + gridFSFile);
+            }
+
+        }
+
+
     }
 
 }

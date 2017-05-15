@@ -20,6 +20,7 @@ import org.jpmml.evaluator.ModelEvaluatorFactory;
 import org.jpmml.evaluator.mining.MiningModelEvaluator;
 import org.jpmml.model.ImportFilter;
 import org.jpmml.model.JAXBUtil;
+import org.jpmml.model.PMMLUtil;
 import org.jpmml.model.visitors.LocatorNullifier;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
